@@ -43,4 +43,9 @@ public class UserServiceImpl implements UserService {
 		return new User(userDto.getUsername(), userDto.getPassword(),
 				userDto.getEnabled(), true, true, true, authorities);
 	}
+
+	@Override
+	public UserDto findByUsername(String username) {
+		return userFeignClient.findByUsername(username);
+	}
 }
