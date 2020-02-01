@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 import com.joseluisestevez.msa.commons.users.dto.UserDto;
 import com.joseluisestevez.msa.oauth.services.UserService;
 
+import brave.Tracer;
+
 @Component
 public class AuthenticationSuccessErrorHandler
 		implements
@@ -19,6 +21,9 @@ public class AuthenticationSuccessErrorHandler
 
 	private static final Logger LOGGER = LoggerFactory
 			.getLogger(AuthenticationSuccessErrorHandler.class);
+
+	@Autowired
+	private Tracer tracer;
 
 	@Autowired
 	private UserService userService;
@@ -37,15 +42,16 @@ public class AuthenticationSuccessErrorHandler
 	@Override
 	public void publishAuthenticationFailure(AuthenticationException exception,
 			Authentication authentication) {
-		StringBuilder errors = new StringBuilder();
+
 		String message = "Login Error " + exception.getMessage();
-		errors.append("- " + message);
 		LOGGER.error(message);
 
+		StringBuilder errors = new StringBuilder();
+		errors.append(message);
 		try {
 			UserDto userDto = userService
 					.findByUsername(authentication.getName());
-
+			errors.append(" - username: ").append(authentication.getName());
 			if (userDto.getAttempts() == null) {
 				userDto.setAttempts(0);
 			}
@@ -54,17 +60,18 @@ public class AuthenticationSuccessErrorHandler
 			userDto.setAttempts(userDto.getAttempts() + 1);
 			LOGGER.info("Attempts after [{}] ", userDto.getAttempts());
 
-			errors.append("- Attempts after " + userDto.getAttempts());
+			errors.append(" - Attempts after " + userDto.getAttempts());
 
 			if (userDto.getAttempts() >= 3) {
-				errors.append("- User " + userDto.getUsername() + " disabled ");
+				errors.append(" - User disabled ");
 
 				userDto.setEnabled(false);
 				LOGGER.info("User [{}] disabled ", userDto.getUsername());
 			}
 
 			userService.update(userDto, userDto.getId());
-
+			tracer.currentSpan().tag("msa.oauth.auth.fail.error.message",
+					errors.toString());
 		} catch (Exception e) {
 			LOGGER.error("User [{}] does not exist in the system",
 					authentication.getName());

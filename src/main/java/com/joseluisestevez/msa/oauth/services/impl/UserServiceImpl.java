@@ -17,12 +17,16 @@ import com.joseluisestevez.msa.commons.users.dto.UserDto;
 import com.joseluisestevez.msa.oauth.clients.UserFeignClient;
 import com.joseluisestevez.msa.oauth.services.UserService;
 
+import brave.Tracer;
 import feign.FeignException;
 
 @Service
 public class UserServiceImpl implements UserService {
 	private static final Logger LOGGER = LoggerFactory
 			.getLogger(UserServiceImpl.class);
+
+	@Autowired
+	private Tracer tracer;
 
 	@Autowired
 	private UserFeignClient userFeignClient;
@@ -46,9 +50,12 @@ public class UserServiceImpl implements UserService {
 			return new User(userDto.getUsername(), userDto.getPassword(),
 					userDto.getEnabled(), true, true, true, authorities);
 		} catch (FeignException e) {
+			String error = "User " + username + " does not exist : "
+					+ e.getMessage();
+			tracer.currentSpan().tag("msa.oauth.load.user.error.message",
+					error);
 			LOGGER.error("User [{}] does not exist ", username);
-			throw new UsernameNotFoundException(
-					"User " + username + " does not exist");
+			throw new UsernameNotFoundException(error);
 		}
 
 	}
